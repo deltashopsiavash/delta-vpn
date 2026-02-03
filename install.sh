@@ -1,67 +1,171 @@
+#!/bin/bash
+set -euo pipefail
+
+# ============================================================
+#               DELTA VPN - GRE MANAGER
+# ============================================================
+
 # ============================
-# Colors (add/keep these)
+# Personalization
+# ============================
+BRAND_NAME="DELTA VPN"
+AUTHOR_TAG="@delta_vpn1"
+GRE_NAME="gre1"
+LOG_FILE="/var/log/delta-vpn-gre.log"
+
+THIS_PUBLIC_IP="$(curl -fsS ipv4.icanhazip.com 2>/dev/null || echo UNKNOWN)"
+
+# ============================
+# Colors
 # ============================
 PINK="\033[38;5;213m"
 PINK2="\033[38;5;219m"
 PURPLE="\033[38;5;90m"
-GRAY="\033[38;5;240m"
-CYAN="\033[0;36m"
-YELLOW="\033[0;33m"
 GREEN="\033[0;32m"
+RED="\033[0;31m"
+YELLOW="\033[0;33m"
 BLUE="\033[0;34m"
+CYAN="\033[0;36m"
 NC="\033[0m"
 
+BTN1="${GREEN}[ 1 ]${NC}"
+BTN2="${BLUE}[ 2 ]${NC}"
+BTN3="${RED}[ 3 ]${NC}"
+BTN0="${YELLOW}[ 0 ]${NC}"
+
 # ============================
-# Function: Big DELTA VPN Banner (pixel + layered shadow)
+# Root check
 # ============================
-function delta_banner() {
-    # Each "line" is a row of the banner
-    local L1="██████╗ ███████╗██╗  ████████╗ █████╗     ██╗   ██╗██████╗ ███╗   ██╗"
-    local L2="██╔══██╗██╔════╝██║  ╚══██╔══╝██╔══██╗    ██║   ██║██╔══██╗████╗  ██║"
-    local L3="██║  ██║█████╗  ██║     ██║   ███████║    ██║   ██║██████╔╝██╔██╗ ██║"
-    local L4="██║  ██║██╔══╝  ██║     ██║   ██╔══██║    ╚██╗ ██╔╝██╔═══╝ ██║╚██╗██║"
-    local L5="██████╔╝███████╗███████╗██║   ██║  ██║     ╚████╔╝ ██║     ██║ ╚████║"
-    local L6="╚═════╝ ╚══════╝╚══════╝╚═╝   ╚═╝  ╚═╝      ╚═══╝  ╚═╝     ╚═╝  ╚═══╝"
+[[ $EUID -ne 0 ]] && { echo -e "${RED}❌ Run as root${NC}"; exit 1; }
 
-    # Layered print: shadow -> mid -> main (gives that stacked/3D feel)
-    # You can increase layers by repeating prints with different offsets.
-    printf "\n"
-    printf "${PURPLE}  %s${NC}\n" "$L1"
-    printf "${PURPLE}  %s${NC}\n" "$L2"
-    printf "${PURPLE}  %s${NC}\n" "$L3"
-    printf "${PURPLE}  %s${NC}\n" "$L4"
-    printf "${PURPLE}  %s${NC}\n" "$L5"
-    printf "${PURPLE}  %s${NC}\n" "$L6"
+# ============================
+# Big DELTA VPN Banner
+# ============================
+delta_banner() {
+clear
+local L1="██████╗ ███████╗██╗  ████████╗ █████╗     ██╗   ██╗██████╗ ███╗   ██╗"
+local L2="██╔══██╗██╔════╝██║  ╚══██╔══╝██╔══██╗    ██║   ██║██╔══██╗████╗  ██║"
+local L3="██║  ██║█████╗  ██║     ██║   ███████║    ██║   ██║██████╔╝██╔██╗ ██║"
+local L4="██║  ██║██╔══╝  ██║     ██║   ██╔══██║    ╚██╗ ██╔╝██╔═══╝ ██║╚██╗██║"
+local L5="██████╔╝███████╗███████╗██║   ██║  ██║     ╚████╔╝ ██║     ██║ ╚████║"
+local L6="╚═════╝ ╚══════╝╚══════╝╚═╝   ╚═╝  ╚═╝      ╚═══╝  ╚═╝     ╚═╝  ╚═══╝"
 
-    printf "${PINK} %s${NC}\n" "$L1"
-    printf "${PINK} %s${NC}\n" "$L2"
-    printf "${PINK} %s${NC}\n" "$L3"
-    printf "${PINK} %s${NC}\n" "$L4"
-    printf "${PINK} %s${NC}\n" "$L5"
-    printf "${PINK} %s${NC}\n" "$L6"
+printf "\n"
+for i in {1..2}; do
+  printf "${PURPLE}  %s${NC}\n" "$L1"
+  printf "${PURPLE}  %s${NC}\n" "$L2"
+  printf "${PURPLE}  %s${NC}\n" "$L3"
+  printf "${PURPLE}  %s${NC}\n" "$L4"
+  printf "${PURPLE}  %s${NC}\n" "$L5"
+  printf "${PURPLE}  %s${NC}\n" "$L6"
+done
 
-    printf "${PINK2}%s${NC}\n" "$L1"
-    printf "${PINK2}%s${NC}\n" "$L2"
-    printf "${PINK2}%s${NC}\n" "$L3"
-    printf "${PINK2}%s${NC}\n" "$L4"
-    printf "${PINK2}%s${NC}\n" "$L5"
-    printf "${PINK2}%s${NC}\n" "$L6"
-    printf "\n"
+printf "${PINK} %s${NC}\n" "$L1"
+printf "${PINK} %s${NC}\n" "$L2"
+printf "${PINK} %s${NC}\n" "$L3"
+printf "${PINK} %s${NC}\n" "$L4"
+printf "${PINK} %s${NC}\n" "$L5"
+printf "${PINK} %s${NC}\n" "$L6"
+
+printf "${PINK2}%s${NC}\n" "$L1"
+printf "${PINK2}%s${NC}\n" "$L2"
+printf "${PINK2}%s${NC}\n" "$L3"
+printf "${PINK2}%s${NC}\n" "$L4"
+printf "${PINK2}%s${NC}\n" "$L5"
+printf "${PINK2}%s${NC}\n" "$L6"
+
+echo
+echo -e "${CYAN}DELTA VPN - Simple GRE Local Tunnel${NC}"
+echo -e "${YELLOW}GRE is NOT encrypted (GRE رمزنگاری ندارد)${NC}"
+echo
+echo -e "👤 Author: ${YELLOW}${AUTHOR_TAG}${NC}"
+echo -e "🌍 This server IPv4 (آیپی این سرور): ${GREEN}${THIS_PUBLIC_IP}${NC}"
+echo
 }
 
 # ============================
-# Replace your header() with this
+# Create GRE
 # ============================
-function header() {
-    clear
-    delta_banner
-    echo -e "${CYAN}DELTA VPN — Simple GRE Local Tunnel${NC}"
-    echo -e "${YELLOW}GRE is NOT encrypted (رمزنگاری ندارد)${NC}"
-    echo
-    echo -e "👤 Maintained by: ${YELLOW}${AUTHOR_TAG}${NC}"
-    echo -e "📍 This server IPv4 (آیپی این سرور): ${GREEN}${THIS_PUBLIC_IP}${NC}"
-    echo
+create_gre() {
+echo -e "${CYAN}Enter Peer Public IP:${NC}"
+read -rp "> " REMOTE_IP
+
+echo -e "${CYAN}Enter Private IPv4 (e.g. 10.10.10.1/30):${NC}"
+read -rp "> " IPV4
+
+echo -e "${CYAN}Enter Private IPv6 (e.g. fd00::1/126):${NC}"
+read -rp "> " IPV6
+
+echo -e "${CYAN}MTU (default 1400):${NC}"
+read -rp "> " MTU
+MTU="${MTU:-1400}"
+
+modprobe ip_gre || true
+ip tunnel del $GRE_NAME 2>/dev/null || true
+
+ip tunnel add $GRE_NAME mode gre local $THIS_PUBLIC_IP remote $REMOTE_IP ttl 255
+ip link set $GRE_NAME up mtu $MTU
+ip addr add $IPV4 dev $GRE_NAME
+ip -6 addr add $IPV6 dev $GRE_NAME
+
+sysctl -w net.ipv4.ip_forward=1 >/dev/null
+sysctl -w net.ipv6.conf.all.forwarding=1 >/dev/null
+
+iptables -C INPUT -p gre -j ACCEPT 2>/dev/null || iptables -A INPUT -p gre -j ACCEPT
+
+echo -e "${GREEN}✅ GRE Tunnel Created Successfully${NC}"
+echo "$(date) GRE created to $REMOTE_IP" >> $LOG_FILE
 }
+
+# ============================
+# Status
+# ============================
+status_gre() {
+if ip link show $GRE_NAME &>/dev/null; then
+  echo -e "${GREEN}✅ GRE is UP${NC}"
+  ip addr show $GRE_NAME
+else
+  echo -e "${RED}❌ GRE is DOWN${NC}"
+fi
+}
+
+# ============================
+# Remove GRE
+# ============================
+remove_gre() {
+if ip link show $GRE_NAME &>/dev/null; then
+  ip tunnel del $GRE_NAME
+  echo -e "${YELLOW}🗑 GRE Removed${NC}"
+  echo "$(date) GRE removed" >> $LOG_FILE
+else
+  echo -e "${RED}❌ GRE not found${NC}"
+fi
+}
+
+# ============================
+# Main Menu
+# ============================
+while true; do
+  delta_banner
+  echo -e "${BTN1} Create / Rebuild GRE   (ساخت / بازسازی)"
+  echo -e "${BTN2} Status                (وضعیت)"
+  echo -e "${BTN3} Remove GRE            (حذف)"
+  echo -e "${BTN0} Exit                  (خروج)"
+  echo
+  read -rp "Select (انتخاب): " opt
+
+  case "$opt" in
+    1) create_gre ;;
+    2) status_gre ;;
+    3) remove_gre ;;
+    0) exit 0 ;;
+    *) echo -e "${RED}❌ Invalid option${NC}"; sleep 1 ;;
+  esac
+
+  echo
+  read -rp "Press Enter..."
+done
+
 
 
 # ============================
