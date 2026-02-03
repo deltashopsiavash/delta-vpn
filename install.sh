@@ -1,140 +1,168 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/bash
+set -e
 
-# ==========================================
-# DELTA VPN - WireGuard one-command installer
-# For Ubuntu/Debian (apt)
-# Output client config: /root/delta-client.conf
-# ==========================================
+GRE_NAME="gre1"
+THIS_PUBLIC_IP=$(curl -s ipv4.icanhazip.com)
+LOG_FILE="/var/log/gre-manager.log"
 
-if [[ $EUID -ne 0 ]]; then
-  echo "[-] لطفاً با root اجرا کن: sudo ./install.sh"
-  exit 1
-fi
+# ============================
+# Function: Header
+# ============================
+function header() {
+    clear
+    echo "=========================================="
+    echo "   GRE Smart Manager | IPv4 + IPv6 Private"
+    echo "=========================================="
+    echo -e "📍 This Server Public IP: $THIS_PUBLIC_IP"
+    echo
+}
 
-command_exists() { command -v "$1" >/dev/null 2>&1; }
+# ============================
+# Function: Enable TCP BBR / BBR2 / Cubic
+# ============================
+function enable_bbr() {
+    echo "🔧 Select TCP Congestion Control:"
+    echo "1) BBR (recommended)"
+    echo "2) BBR2"
+    echo "3) Cubic (default Linux)"
+    read -rp "Your choice: " bbr
 
-echo "[+] DELTA VPN نصب شروع شد..."
+    case $bbr in
+        1) algo="bbr" ;;
+        2) algo="bbr2" ;;
+        3) algo="cubic" ;;
+        *) echo -e "\033[0;31m❌ Invalid choice\033[0m"; return ;;
+    esac
 
-if ! command_exists apt-get; then
-  echo "[-] این اسکریپت برای Ubuntu/Debian نوشته شده (apt-get پیدا نشد)."
-  exit 1
-fi
+    # Check if algorithm is available
+    if ! sysctl net.ipv4.tcp_available_congestion_control | grep -qw "$algo"; then
+        echo -e "\033[0;31m❌ $algo is not available on this system\033[0m"
+        return
+    fi
 
-read -rp "[?] آی‌پی عمومی یا دامنه سرور (Endpoint)؟ مثال: 1.2.3.4 یا vpn.example.com : " ENDPOINT
-if [[ -z "${ENDPOINT}" ]]; then
-  echo "[-] Endpoint خالیه."
-  exit 1
-fi
+    # Remove old entries
+    sed -i '/net.core.default_qdisc/d;/net.ipv4.tcp_congestion_control/d' /etc/sysctl.conf
 
-read -rp "[?] پورت WireGuard (پیشفرض 51820): " WG_PORT
-WG_PORT="${WG_PORT:-51820}"
-
-read -rp "[?] نام کلاینت (پیشفرض delta-client): " CLIENT_NAME
-CLIENT_NAME="${CLIENT_NAME:-delta-client}"
-
-echo "[+] نصب پکیج‌ها..."
-apt-get update -y
-apt-get install -y wireguard iptables qrencode
-
-echo "[+] فعال‌سازی IP Forwarding..."
-sysctl -w net.ipv4.ip_forward=1 >/dev/null
-grep -q "^net.ipv4.ip_forward=1" /etc/sysctl.conf || echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
-
-IFACE="$(ip -o -4 route show to default | awk '{print $5}' | head -n1)"
-if [[ -z "${IFACE}" ]]; then
-  echo "[-] اینترفیس شبکه پیدا نشد."
-  exit 1
-fi
-echo "[+] اینترفیس شبکه: ${IFACE}"
-
-umask 077
-WG_DIR="/etc/wireguard"
-mkdir -p "${WG_DIR}"
-
-SERVER_PRIV="${WG_DIR}/server.key"
-SERVER_PUB="${WG_DIR}/server.pub"
-CLIENT_PRIV="${WG_DIR}/${CLIENT_NAME}.key"
-CLIENT_PUB="${WG_DIR}/${CLIENT_NAME}.pub"
-
-if [[ ! -f "${SERVER_PRIV}" ]]; then
-  echo "[+] ساخت کلیدهای سرور..."
-  wg genkey | tee "${SERVER_PRIV}" | wg pubkey > "${SERVER_PUB}"
-else
-  echo "[i] کلیدهای سرور از قبل وجود دارد."
-fi
-
-if [[ ! -f "${CLIENT_PRIV}" ]]; then
-  echo "[+] ساخت کلیدهای کلاینت..."
-  wg genkey | tee "${CLIENT_PRIV}" | wg pubkey > "${CLIENT_PUB}"
-else
-  echo "[i] کلیدهای کلاینت از قبل وجود دارد."
-fi
-
-SERVER_PRIVATE_KEY="$(cat "${SERVER_PRIV}")"
-SERVER_PUBLIC_KEY="$(cat "${SERVER_PUB}")"
-CLIENT_PRIVATE_KEY="$(cat "${CLIENT_PRIV}")"
-CLIENT_PUBLIC_KEY="$(cat "${CLIENT_PUB}")"
-
-SERVER_ADDR="10.66.66.1/24"
-CLIENT_ADDR="10.66.66.2/32"
-WG_CONF="${WG_DIR}/wg0.conf"
-
-echo "[+] ساخت کانفیگ سرور: ${WG_CONF}"
-cat > "${WG_CONF}" <<EOF
-[Interface]
-Address = ${SERVER_ADDR}
-ListenPort = ${WG_PORT}
-PrivateKey = ${SERVER_PRIVATE_KEY}
-
-PostUp = iptables -A FORWARD -i wg0 -j ACCEPT; iptables -A FORWARD -o wg0 -j ACCEPT; iptables -t nat -A POSTROUTING -o ${IFACE} -j MASQUERADE
-PostDown = iptables -D FORWARD -i wg0 -j ACCEPT; iptables -D FORWARD -o wg0 -j ACCEPT; iptables -t nat -D POSTROUTING -o ${IFACE} -j MASQUERADE
-
-[Peer]
-PublicKey = ${CLIENT_PUBLIC_KEY}
-AllowedIPs = ${CLIENT_ADDR}
+    cat >> /etc/sysctl.conf <<EOF
+net.core.default_qdisc=fq
+net.ipv4.tcp_congestion_control=$algo
 EOF
 
-chmod 600 "${WG_CONF}" "${SERVER_PRIV}" "${CLIENT_PRIV}"
+    sysctl -p >/dev/null
+    echo -e "\033[0;32m✅ TCP Congestion Control set to $algo\033[0m"
+    echo "$(date) - TCP set to $algo" >> $LOG_FILE
+}
 
-echo "[+] فعال‌سازی سرویس WireGuard..."
-systemctl enable wg-quick@wg0 >/dev/null
-systemctl restart wg-quick@wg0
+# ============================
+# Function: Create / Rebuild GRE Tunnel
+# ============================
+function create_gre() {
+    echo "🌐 Enter Public IP of the server you want to connect (Server Peer):"
+    read -rp "> " REMOTE_PUBLIC_IP
 
-if command_exists ufw; then
-  if ufw status | grep -qi "Status: active"; then
-    echo "[+] UFW فعال است — باز کردن پورت ${WG_PORT}/udp"
-    ufw allow "${WG_PORT}/udp" || true
-  fi
-fi
+    echo "🔹 Enter Private IPv4 for this server (e.g., 10.50.60.1/30):"
+    read -rp "> " PRIVATE_IPV4
 
-CLIENT_CONF_OUT="/root/${CLIENT_NAME}.conf"
-echo "[+] ساخت کانفیگ کلاینت: ${CLIENT_CONF_OUT}"
-cat > "${CLIENT_CONF_OUT}" <<EOF
-[Interface]
-PrivateKey = ${CLIENT_PRIVATE_KEY}
-Address = 10.66.66.2/32
-DNS = 1.1.1.1
+    echo "🔹 Enter Private IPv6 for this server (e.g., fd00:50:60::1/126):"
+    read -rp "> " PRIVATE_IPV6
 
-[Peer]
-PublicKey = ${SERVER_PUBLIC_KEY}
-Endpoint = ${ENDPOINT}:${WG_PORT}
-AllowedIPs = 0.0.0.0/0, ::/0
-PersistentKeepalive = 25
-EOF
+    echo "🔹 Enter MTU (recommended: 1400):"
+    read -rp "> " MTU
+    MTU=${MTU:-1400}
 
-chmod 600 "${CLIENT_CONF_OUT}"
+    echo
+    echo "📋 Configuration Summary:"
+    echo "This server      : $THIS_PUBLIC_IP"
+    echo "Peer server      : $REMOTE_PUBLIC_IP"
+    echo "Private IPv4     : $PRIVATE_IPV4"
+    echo "Private IPv6     : $PRIVATE_IPV6"
+    echo "MTU              : $MTU"
+    echo
+    read -rp "Continue? (y/n): " c
+    [[ "$c" != "y" ]] && return
 
-echo
-echo "=============================================="
-echo "[✓] نصب کامل شد!"
-echo "Client Config: ${CLIENT_CONF_OUT}"
-echo "Endpoint:      ${ENDPOINT}:${WG_PORT}"
-echo "=============================================="
-echo
-echo "[i] QR برای موبایل:"
-qrencode -t ansiutf8 < "${CLIENT_CONF_OUT}" || true
-echo
-echo "[i] وضعیت:"
-echo "    sudo wg show"
-echo "    sudo systemctl status wg-quick@wg0"
+    echo "🚀 Creating GRE Tunnel..."
+    modprobe ip_gre || true
+    ip tunnel del $GRE_NAME 2>/dev/null || true
+
+    ip tunnel add $GRE_NAME mode gre \
+        local $THIS_PUBLIC_IP \
+        remote $REMOTE_PUBLIC_IP \
+        ttl 255
+
+    ip link set $GRE_NAME up
+    ip link set $GRE_NAME mtu $MTU
+
+    ip addr add $PRIVATE_IPV4 dev $GRE_NAME
+    ip -6 addr add $PRIVATE_IPV6 dev $GRE_NAME
+
+    sysctl -w net.ipv4.ip_forward=1 >/dev/null
+    sysctl -w net.ipv6.conf.all.forwarding=1 >/dev/null
+
+    iptables -C INPUT -p gre -j ACCEPT 2>/dev/null || iptables -A INPUT -p gre -j ACCEPT
+
+    echo -e "\033[0;32m✅ GRE Tunnel is UP\033[0m"
+    ip addr show $GRE_NAME
+    echo "$(date) - GRE Tunnel created for $REMOTE_PUBLIC_IP" >> $LOG_FILE
+
+    # ============================
+    # Test connectivity
+    # ============================
+    echo
+    echo "🔍 Testing connectivity..."
+    LOCAL_IPV4=$(echo $PRIVATE_IPV4 | cut -d/ -f1)
+    LOCAL_IPV6=$(echo $PRIVATE_IPV6 | cut -d/ -f1)
+
+    echo "🌐 Pinging Peer via IPv4..."
+    if ping -c 3 $LOCAL_IPV4 >/dev/null 2>&1; then
+        echo -e "\033[0;32m✅ IPv4 tunnel is reachable\033[0m"
+    else
+        echo -e "\033[0;31m❌ IPv4 tunnel test failed\033[0m"
+    fi
+
+    echo "🌐 Pinging Peer via IPv6..."
+    if ping6 -c 3 $LOCAL_IPV6 >/dev/null 2>&1; then
+        echo -e "\033[0;32m✅ IPv6 tunnel is reachable\033[0m"
+    else
+        echo -e "\033[0;31m❌ IPv6 tunnel test failed\033[0m"
+    fi
+}
+
+# ============================
+# Function: Remove GRE Tunnel
+# ============================
+function remove_gre() {
+    echo "⚠ Removing GRE Tunnel..."
+    if ip link show $GRE_NAME >/dev/null 2>&1; then
+        ip addr flush dev $GRE_NAME
+        ip tunnel del $GRE_NAME
+        echo -e "\033[0;33m🗑 GRE Tunnel removed\033[0m"
+        echo "$(date) - GRE Tunnel removed" >> $LOG_FILE
+    else
+        echo -e "\033[0;31m❌ GRE Tunnel not found\033[0m"
+    fi
+}
+
+# ============================
+# Main Menu Loop
+# ============================
+while true; do
+    header
+    echo "1) Create / Rebuild GRE Tunnel"
+    echo "2) Remove GRE Tunnel"
+    echo "3) Enable TCP BBR / BBR2"
+    echo "0) Exit"
+    echo
+    read -rp "Select an option: " opt
+
+    case $opt in
+        1) create_gre ;;
+        2) remove_gre ;;
+        3) enable_bbr ;;
+        0) exit 0 ;;
+        *) echo -e "\033[0;31m❌ Invalid option\033[0m"; sleep 1 ;;
+    esac
+
+    echo
+    read -rp "Press Enter to continue..."
+done
