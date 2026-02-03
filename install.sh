@@ -1,20 +1,62 @@
 #!/bin/bash
-set -e
+# ============================================================
+#  ____  _____ _   _____  _      __     __PN
+# |  _ \| ____| | |_   _|/ \     \ \   / / _ \  _   _  _ __
+# | | | |  _| | |   | | / _ \     \ \ / / | | || | | || '_ \
+# | |_| | |___| |___| |/ ___ \     \ V /| |_| || |_| || | | |
+# |____/|_____|_____|_/_/   \_\     \_/  \___/  \__,_||_| |_|
+#
+#                 DELTA VPN — GRE Smart Manager
+# ============================================================
+# Repo-friendly, interactive GRE tunnel manager (IPv4 + IPv6)
+# Author: <YOUR_NAME_OR_HANDLE>
+# GitHub: <YOUR_GITHUB_URL>
+# ============================================================
 
+set -euo pipefail
+
+# ============================
+# Brand / Personalization
+# ============================
+BRAND_NAME="DELTA VPN"
+APP_NAME="GRE Smart Manager"
+AUTHOR_TAG="@yourhandle"   # مثلا: @doughtrive
 GRE_NAME="gre1"
-THIS_PUBLIC_IP=$(curl -s ipv4.icanhazip.com)
-LOG_FILE="/var/log/gre-manager.log"
+LOG_FILE="/var/log/delta-vpn-gre-manager.log"
+
+# Get public IP (best-effort)
+THIS_PUBLIC_IP="$(curl -fsS ipv4.icanhazip.com 2>/dev/null || echo "UNKNOWN")"
+
+# ============================
+# Colors (optional)
+# ============================
+RED="\033[0;31m"
+GREEN="\033[0;32m"
+YELLOW="\033[0;33m"
+CYAN="\033[0;36m"
+NC="\033[0m"
 
 # ============================
 # Function: Header
 # ============================
 function header() {
     clear
-    echo "=========================================="
-    echo "   GRE Smart Manager | IPv4 + IPv6 Private"
-    echo "=========================================="
-    echo -e "📍 This Server Public IP: $THIS_PUBLIC_IP"
+    echo -e "${CYAN}========================================================${NC}"
+    echo -e "${CYAN}                 ${BRAND_NAME} — ${APP_NAME}${NC}"
+    echo -e "${CYAN}========================================================${NC}"
+    echo -e "👤 Maintained by: ${AUTHOR_TAG}"
+    echo -e "📍 This Server Public IP: ${THIS_PUBLIC_IP}"
     echo
+}
+
+# ============================
+# Function: Require root
+# ============================
+function require_root() {
+    if [[ "${EUID}" -ne 0 ]]; then
+        echo -e "${RED}❌ Please run as root (sudo).${NC}"
+        exit 1
+    fi
 }
 
 # ============================
@@ -27,16 +69,17 @@ function enable_bbr() {
     echo "3) Cubic (default Linux)"
     read -rp "Your choice: " bbr
 
-    case $bbr in
+    local algo=""
+    case "$bbr" in
         1) algo="bbr" ;;
         2) algo="bbr2" ;;
         3) algo="cubic" ;;
-        *) echo -e "\033[0;31m❌ Invalid choice\033[0m"; return ;;
+        *) echo -e "${RED}❌ Invalid choice${NC}"; return ;;
     esac
 
     # Check if algorithm is available
     if ! sysctl net.ipv4.tcp_available_congestion_control | grep -qw "$algo"; then
-        echo -e "\033[0;31m❌ $algo is not available on this system\033[0m"
+        echo -e "${RED}❌ $algo is not available on this system${NC}"
         return
     fi
 
@@ -49,8 +92,8 @@ net.ipv4.tcp_congestion_control=$algo
 EOF
 
     sysctl -p >/dev/null
-    echo -e "\033[0;32m✅ TCP Congestion Control set to $algo\033[0m"
-    echo "$(date) - TCP set to $algo" >> $LOG_FILE
+    echo -e "${GREEN}✅ TCP Congestion Control set to $algo${NC}"
+    echo "$(date) - [$BRAND_NAME] TCP set to $algo" >> "$LOG_FILE"
 }
 
 # ============================
@@ -60,18 +103,18 @@ function create_gre() {
     echo "🌐 Enter Public IP of the server you want to connect (Server Peer):"
     read -rp "> " REMOTE_PUBLIC_IP
 
-    echo "🔹 Enter Private IPv4 for this server (e.g., 10.50.60.1/30):"
+    echo "🔹 Enter Private IPv4 for THIS server (e.g., 10.50.60.1/30):"
     read -rp "> " PRIVATE_IPV4
 
-    echo "🔹 Enter Private IPv6 for this server (e.g., fd00:50:60::1/126):"
+    echo "🔹 Enter Private IPv6 for THIS server (e.g., fd00:50:60::1/126):"
     read -rp "> " PRIVATE_IPV6
 
     echo "🔹 Enter MTU (recommended: 1400):"
     read -rp "> " MTU
-    MTU=${MTU:-1400}
+    MTU="${MTU:-1400}"
 
     echo
-    echo "📋 Configuration Summary:"
+    echo -e "${CYAN}📋 ${BRAND_NAME} Tunnel Summary${NC}"
     echo "This server      : $THIS_PUBLIC_IP"
     echo "Peer server      : $REMOTE_PUBLIC_IP"
     echo "Private IPv4     : $PRIVATE_IPV4"
@@ -81,51 +124,56 @@ function create_gre() {
     read -rp "Continue? (y/n): " c
     [[ "$c" != "y" ]] && return
 
-    echo "🚀 Creating GRE Tunnel..."
+    echo "🚀 Building GRE Tunnel..."
     modprobe ip_gre || true
-    ip tunnel del $GRE_NAME 2>/dev/null || true
+    ip tunnel del "$GRE_NAME" 2>/dev/null || true
 
-    ip tunnel add $GRE_NAME mode gre \
-        local $THIS_PUBLIC_IP \
-        remote $REMOTE_PUBLIC_IP \
+    ip tunnel add "$GRE_NAME" mode gre \
+        local "$THIS_PUBLIC_IP" \
+        remote "$REMOTE_PUBLIC_IP" \
         ttl 255
 
-    ip link set $GRE_NAME up
-    ip link set $GRE_NAME mtu $MTU
+    ip link set "$GRE_NAME" up
+    ip link set "$GRE_NAME" mtu "$MTU"
 
-    ip addr add $PRIVATE_IPV4 dev $GRE_NAME
-    ip -6 addr add $PRIVATE_IPV6 dev $GRE_NAME
+    ip addr add "$PRIVATE_IPV4" dev "$GRE_NAME"
+    ip -6 addr add "$PRIVATE_IPV6" dev "$GRE_NAME"
 
     sysctl -w net.ipv4.ip_forward=1 >/dev/null
     sysctl -w net.ipv6.conf.all.forwarding=1 >/dev/null
 
     iptables -C INPUT -p gre -j ACCEPT 2>/dev/null || iptables -A INPUT -p gre -j ACCEPT
 
-    echo -e "\033[0;32m✅ GRE Tunnel is UP\033[0m"
-    ip addr show $GRE_NAME
-    echo "$(date) - GRE Tunnel created for $REMOTE_PUBLIC_IP" >> $LOG_FILE
+    echo -e "${GREEN}✅ GRE Tunnel is UP — powered by ${BRAND_NAME}${NC}"
+    ip addr show "$GRE_NAME"
+    echo "$(date) - [$BRAND_NAME] GRE Tunnel created for $REMOTE_PUBLIC_IP" >> "$LOG_FILE"
 
     # ============================
-    # Test connectivity
+    # Simple connectivity checks
     # ============================
     echo
-    echo "🔍 Testing connectivity..."
-    LOCAL_IPV4=$(echo $PRIVATE_IPV4 | cut -d/ -f1)
-    LOCAL_IPV6=$(echo $PRIVATE_IPV6 | cut -d/ -f1)
+    echo "🔍 Quick tests (basic reachability)..."
 
-    echo "🌐 Pinging Peer via IPv4..."
-    if ping -c 3 $LOCAL_IPV4 >/dev/null 2>&1; then
-        echo -e "\033[0;32m✅ IPv4 tunnel is reachable\033[0m"
+    local LOCAL_IPV4 LOCAL_IPV6
+    LOCAL_IPV4="$(echo "$PRIVATE_IPV4" | cut -d/ -f1)"
+    LOCAL_IPV6="$(echo "$PRIVATE_IPV6" | cut -d/ -f1)"
+
+    echo "🌐 Pinging via IPv4..."
+    if ping -c 3 "$LOCAL_IPV4" >/dev/null 2>&1; then
+        echo -e "${GREEN}✅ IPv4 reachable${NC}"
     else
-        echo -e "\033[0;31m❌ IPv4 tunnel test failed\033[0m"
+        echo -e "${RED}❌ IPv4 test failed${NC}"
     fi
 
-    echo "🌐 Pinging Peer via IPv6..."
-    if ping6 -c 3 $LOCAL_IPV6 >/dev/null 2>&1; then
-        echo -e "\033[0;32m✅ IPv6 tunnel is reachable\033[0m"
+    echo "🌐 Pinging via IPv6..."
+    if ping6 -c 3 "$LOCAL_IPV6" >/dev/null 2>&1; then
+        echo -e "${GREEN}✅ IPv6 reachable${NC}"
     else
-        echo -e "\033[0;31m❌ IPv6 tunnel test failed\033[0m"
+        echo -e "${RED}❌ IPv6 test failed${NC}"
     fi
+
+    echo
+    echo -e "${YELLOW}ℹ Tip:${NC} اگر سمت مقابل هم GRE ساخته نشده باشه، تست‌ها ممکنه fail بشن."
 }
 
 # ============================
@@ -133,34 +181,36 @@ function create_gre() {
 # ============================
 function remove_gre() {
     echo "⚠ Removing GRE Tunnel..."
-    if ip link show $GRE_NAME >/dev/null 2>&1; then
-        ip addr flush dev $GRE_NAME
-        ip tunnel del $GRE_NAME
-        echo -e "\033[0;33m🗑 GRE Tunnel removed\033[0m"
-        echo "$(date) - GRE Tunnel removed" >> $LOG_FILE
+    if ip link show "$GRE_NAME" >/dev/null 2>&1; then
+        ip addr flush dev "$GRE_NAME"
+        ip tunnel del "$GRE_NAME"
+        echo -e "${YELLOW}🗑 GRE Tunnel removed${NC}"
+        echo "$(date) - [$BRAND_NAME] GRE Tunnel removed" >> "$LOG_FILE"
     else
-        echo -e "\033[0;31m❌ GRE Tunnel not found\033[0m"
+        echo -e "${RED}❌ GRE Tunnel not found${NC}"
     fi
 }
 
 # ============================
-# Main Menu Loop
+# Main
 # ============================
+require_root
+
 while true; do
     header
     echo "1) Create / Rebuild GRE Tunnel"
     echo "2) Remove GRE Tunnel"
-    echo "3) Enable TCP BBR / BBR2"
+    echo "3) Enable TCP BBR / BBR2 / Cubic"
     echo "0) Exit"
     echo
     read -rp "Select an option: " opt
 
-    case $opt in
+    case "$opt" in
         1) create_gre ;;
         2) remove_gre ;;
         3) enable_bbr ;;
-        0) exit 0 ;;
-        *) echo -e "\033[0;31m❌ Invalid option\033[0m"; sleep 1 ;;
+        0) echo -e "${CYAN}Bye 👋 (${BRAND_NAME})${NC}"; exit 0 ;;
+        *) echo -e "${RED}❌ Invalid option${NC}"; sleep 1 ;;
     esac
 
     echo
