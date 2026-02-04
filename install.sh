@@ -1,15 +1,6 @@
 #!/bin/bash
 # ============================================================
-#   ██████╗ ███████╗██╗  ████████╗ █████╗     ██╗   ██╗██████╗ ███╗   ██╗
-#   ██╔══██╗██╔════╝██║  ╚══██╔══╝██╔══██╗    ██║   ██║██╔══██╗████╗  ██║
-#   ██║  ██║█████╗  ██║     ██║   ███████║    ██║   ██║██████╔╝██╔██╗ ██║
-#   ██║  ██║██╔══╝  ██║     ██║   ██╔══██║    ╚██╗ ██╔╝██╔═══╝ ██║╚██╗██║
-#   ██████╔╝███████╗███████╗██║   ██║  ██║     ╚████╔╝ ██║     ██║ ╚████║
-#   ╚═════╝ ╚══════╝╚══════╝╚═╝   ╚═╝  ╚═╝      ╚═══╝  ╚═╝     ╚═╝  ╚═══╝
-#
-#                         D E L T A   V P N
-# ============================================================
-# Repo-friendly, interactive GRE tunnel manager (IPv4 + IPv6)
+#  DELTA VPN - GRE Smart Manager (Offline Friendly)
 # ============================================================
 
 set -euo pipefail
@@ -23,7 +14,7 @@ AUTHOR_TAG="@delta_vpn1"
 GRE_NAME="gre1"
 LOG_FILE="/var/log/delta-vpn-gre-manager.log"
 
-# Get public IP (best-effort)
+# Get public IP (best-effort). If offline: UNKNOWN (no problem)
 THIS_PUBLIC_IP="$(curl -fsS ipv4.icanhazip.com 2>/dev/null || echo "UNKNOWN")"
 
 # ============================
@@ -37,24 +28,17 @@ MAGENTA="\033[0;35m"
 CYAN="\033[0;36m"
 NC="\033[0m"
 
+# Extra neon-ish colors (closer to screenshot vibe)
+PINK="\033[38;5;213m"
+PINK2="\033[38;5;219m"
+PURPLE="\033[38;5;90m"
+GRAY="\033[38;5;240m"
+
 # Fancy menu badges (colorful buttons)
 BTN1="${GREEN}[ 1 ]${NC}"
-BTN2="${RED}[ 2 ]${NC}"
+BTN2="${CYAN}[ 2 ]${NC}"
 BTN3="${MAGENTA}[ 3 ]${NC}"
 BTN0="${YELLOW}[ 0 ]${NC}"
-
-# ============================
-# Function: Header
-# ============================
-function header() {
-    clear
-    echo -e "${CYAN}========================================================${NC}"
-    echo -e "${CYAN}                 ${BRAND_NAME} — ${APP_NAME}${NC}"
-    echo -e "${CYAN}========================================================${NC}"
-    echo -e "👤 Maintained by: ${YELLOW}${AUTHOR_TAG}${NC}"
-    echo -e "📍 This Server Public IP: ${BLUE}${THIS_PUBLIC_IP}${NC}"
-    echo
-}
 
 # ============================
 # Function: Require root
@@ -67,10 +51,60 @@ function require_root() {
 }
 
 # ============================
+# Function: Big DELTA VPN Banner (layered, like screenshot)
+# ============================
+function delta_banner() {
+    local A1="██████╗ ███████╗██╗  ████████╗ █████╗     ██╗   ██╗██████╗ ███╗   ██╗"
+    local A2="██╔══██╗██╔════╝██║  ╚══██╔══╝██╔══██╗    ██║   ██║██╔══██╗████╗  ██║"
+    local A3="██║  ██║█████╗  ██║     ██║   ███████║    ██║   ██║██████╔╝██╔██╗ ██║"
+    local A4="██║  ██║██╔══╝  ██║     ██║   ██╔══██║    ╚██╗ ██╔╝██╔═══╝ ██║╚██╗██║"
+    local A5="██████╔╝███████╗███████╗██║   ██║  ██║     ╚████╔╝ ██║     ██║ ╚████║"
+    local A6="╚═════╝ ╚══════╝╚══════╝╚═╝   ╚═╝  ╚═╝      ╚═══╝  ╚═╝     ╚═╝  ╚═══╝"
+
+    # Shadow layers (offset-ish via leading spaces)
+    printf "\n"
+    printf "${PURPLE}    %s${NC}\n" "$A1"
+    printf "${PURPLE}    %s${NC}\n" "$A2"
+    printf "${PURPLE}    %s${NC}\n" "$A3"
+    printf "${PURPLE}    %s${NC}\n" "$A4"
+    printf "${PURPLE}    %s${NC}\n" "$A5"
+    printf "${PURPLE}    %s${NC}\n" "$A6"
+
+    printf "${PINK}   %s${NC}\n" "$A1"
+    printf "${PINK}   %s${NC}\n" "$A2"
+    printf "${PINK}   %s${NC}\n" "$A3"
+    printf "${PINK}   %s${NC}\n" "$A4"
+    printf "${PINK}   %s${NC}\n" "$A5"
+    printf "${PINK}   %s${NC}\n" "$A6"
+
+    printf "${PINK2}  %s${NC}\n" "$A1"
+    printf "${PINK2}  %s${NC}\n" "$A2"
+    printf "${PINK2}  %s${NC}\n" "$A3"
+    printf "${PINK2}  %s${NC}\n" "$A4"
+    printf "${PINK2}  %s${NC}\n" "$A5"
+    printf "${PINK2}  %s${NC}\n" "$A6"
+    printf "\n"
+}
+
+# ============================
+# Function: Header (like screenshot)
+# ============================
+function header() {
+    clear
+    delta_banner
+    echo -e "${CYAN}${BRAND_NAME} - Simple GRE Local Tunnel${NC}"
+    echo -e "${YELLOW}GRE is NOT encrypted (GRE رمزنگاری ندارد)${NC}"
+    echo
+    echo -e "👤 Maintained by: ${YELLOW}${AUTHOR_TAG}${NC}"
+    echo -e "📍 This server IPv4 (آیپی این سرور): ${GREEN}${THIS_PUBLIC_IP}${NC}"
+    echo
+}
+
+# ============================
 # Function: Enable TCP BBR / BBR2 / Cubic
 # ============================
 function enable_bbr() {
-    echo -e "🔧 Select TCP Congestion Control:"
+    echo -e "${MAGENTA}🔧 Select TCP Congestion Control:${NC}"
     echo -e "  ${GREEN}1)${NC} BBR (recommended)"
     echo -e "  ${MAGENTA}2)${NC} BBR2"
     echo -e "  ${CYAN}3)${NC} Cubic (default Linux)"
@@ -200,12 +234,12 @@ require_root
 
 while true; do
     header
-    echo -e "${BTN1} ${GREEN}Create / Rebuild GRE Tunnel${NC}"
-    echo -e "${BTN2} ${RED}Remove GRE Tunnel${NC}"
-    echo -e "${BTN3} ${MAGENTA}Enable TCP BBR / BBR2 / Cubic${NC}"
-    echo -e "${BTN0} ${YELLOW}Exit${NC}"
+    echo -e "${BTN1} ${GREEN}Create / Rebuild GRE Tunnel${NC}  ${GRAY}(ساخت/بازسازی)${NC}"
+    echo -e "${BTN2} ${CYAN}Remove GRE Tunnel${NC}           ${GRAY}(حذف)${NC}"
+    echo -e "${BTN3} ${MAGENTA}Enable TCP BBR / BBR2 / Cubic${NC} ${GRAY}(بهینه‌سازی)${NC}"
+    echo -e "${BTN0} ${YELLOW}Exit${NC}                        ${GRAY}(خروج)${NC}"
     echo
-    read -rp "Select an option: " opt
+    read -rp "Select an option (انتخاب): " opt
 
     case "$opt" in
         1) create_gre ;;
