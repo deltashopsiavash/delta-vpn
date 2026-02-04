@@ -72,39 +72,22 @@ THIS_PUBLIC_IP="${THIS_PUBLIC_IP:-UNKNOWN}"
 # ============================
 # Banner (ONE logo, layered effect by horizontal offsets)
 # ============================
-banner_lines() {
-  # 6 lines of the logo (single instance)
-  cat <<'EOF'
-██████╗ ███████╗██╗  ████████╗ █████╗     ██╗   ██╗██████╗ ███╗   ██╗
-██╔══██╗██╔════╝██║  ╚══██╔══╝██╔══██╗    ██║   ██║██╔══██╗████╗  ██║
-██║  ██║█████╗  ██║     ██║   ███████║    ██║   ██║██████╔╝██╔██╗ ██║
-██║  ██║██╔══╝  ██║     ██║   ██╔══██║    ╚██╗ ██╔╝██╔═══╝ ██║╚██╗██║
-██████╔╝███████╗███████╗██║   ██║  ██║     ╚████╔╝ ██║     ██║ ╚████║
-╚═════╝ ╚══════╝╚══════╝╚═╝   ╚═╝  ╚═╝      ╚═══╝  ╚═╝     ╚═╝  ╚═══╝
-EOF
-}
-
 delta_banner() {
-  printf "\n"
-  # read each line and print 3 overlays with different indent/colors
-  while IFS= read -r line; do
-    # back shadow (more indent)
-    printf "${PURPLE}   %s${NC}\n" "$line"
-  done < <(banner_lines)
+  local A1="██████╗ ███████╗██╗  ████████╗ █████╗     ██╗   ██╗██████╗ ███╗   ██╗"
+  local A2="██╔══██╗██╔════╝██║  ╚══██╔══╝██╔══██╗    ██║   ██║██╔══██╗████╗  ██║"
+  local A3="██║  ██║█████╗  ██║     ██║   ███████║    ██║   ██║██████╔╝██╔██╗ ██║"
+  local A4="██║  ██║██╔══╝  ██║     ██║   ██╔══██║    ╚██╗ ██╔╝██╔═══╝ ██║╚██╗██║"
+  local A5="██████╔╝███████╗███████╗██║   ██║  ██║     ╚████╔╝ ██║     ██║ ╚████║"
+  local A6="╚═════╝ ╚══════╝╚══════╝╚═╝   ╚═╝  ╚═╝      ╚═══╝  ╚═╝     ╚═╝  ╚═══╝"
 
-  # move cursor up 6 lines to overprint (stack effect) — optional
-  # Some terminals support it, if not it will just show 3 blocks (still 1 logo per block).
-  # We'll avoid cursor moves for maximum compatibility and instead do "same-lines stacking"
-  # by printing again with smaller indent BUT using carriage return per line isn't portable.
-  # So we do a clean 2-layer look with only two prints, not three full blocks.
-
-  # Instead: print a single clean logo with internal look:
-  printf "\n"
-  while IFS= read -r line; do
-    printf "${PINK}  %s${NC}\n" "$line"
-  done < <(banner_lines)
-
-  printf "\n"
+  echo
+  echo -e "${PINK2}${A1}${NC}"
+  echo -e "${PINK2}${A2}${NC}"
+  echo -e "${PINK2}${A3}${NC}"
+  echo -e "${PINK2}${A4}${NC}"
+  echo -e "${PINK2}${A5}${NC}"
+  echo -e "${PINK2}${A6}${NC}"
+  echo
 }
 
 # ============================
