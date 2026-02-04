@@ -61,29 +61,33 @@ function delta_banner() {
     local A5="██████╔╝███████╗███████╗██║   ██║  ██║     ╚████╔╝ ██║     ██║ ╚████║"
     local A6="╚═════╝ ╚══════╝╚══════╝╚═╝   ╚═╝  ╚═╝      ╚═══╝  ╚═╝     ╚═╝  ╚═══╝"
 
-    # Shadow layers (offset-ish via leading spaces)
     printf "\n"
-    printf "${PURPLE}    %s${NC}\n" "$A1"
-    printf "${PURPLE}    %s${NC}\n" "$A2"
-    printf "${PURPLE}    %s${NC}\n" "$A3"
-    printf "${PURPLE}    %s${NC}\n" "$A4"
-    printf "${PURPLE}    %s${NC}\n" "$A5"
-    printf "${PURPLE}    %s${NC}\n" "$A6"
 
-    printf "${PINK}   %s${NC}\n" "$A1"
-    printf "${PINK}   %s${NC}\n" "$A2"
-    printf "${PINK}   %s${NC}\n" "$A3"
-    printf "${PINK}   %s${NC}\n" "$A4"
-    printf "${PINK}   %s${NC}\n" "$A5"
-    printf "${PINK}   %s${NC}\n" "$A6"
+    # Shadow (back)
+    printf "${PURPLE}   %s${NC}\n" "$A1"
+    printf "${PURPLE}   %s${NC}\n" "$A2"
+    printf "${PURPLE}   %s${NC}\n" "$A3"
+    printf "${PURPLE}   %s${NC}\n" "$A4"
+    printf "${PURPLE}   %s${NC}\n" "$A5"
+    printf "${PURPLE}   %s${NC}\n" "$A6"
 
-    printf "${PINK2}  %s${NC}\n" "$A1"
-    printf "${PINK2}  %s${NC}\n" "$A2"
-    printf "${PINK2}  %s${NC}\n" "$A3"
-    printf "${PINK2}  %s${NC}\n" "$A4"
-    printf "${PINK2}  %s${NC}\n" "$A5"
-    printf "${PINK2}  %s${NC}\n" "$A6"
-    printf "\n"
+    # Mid layer
+    printf "${PINK}  %s${NC}\n" "$A1"
+    printf "${PINK}  %s${NC}\n" "$A2"
+    printf "${PINK}  %s${NC}\n" "$A3"
+    printf "${PINK}  %s${NC}\n" "$A4"
+    printf "${PINK}  %s${NC}\n" "$A5"
+    printf "${PINK}  %s${NC}\n" "$A6"
+
+    # Front layer
+    printf "${PINK2} %s${NC}\n" "$A1"
+    printf "${PINK2} %s${NC}\n" "$A2"
+    printf "${PINK2} %s${NC}\n" "$A3"
+    printf "${PINK2} %s${NC}\n" "$A4"
+    printf "${PINK2} %s${NC}\n" "$A5"
+    printf "${PINK2} %s${NC}\n" "$A6"
+
+    echo
 }
 
 # ============================
